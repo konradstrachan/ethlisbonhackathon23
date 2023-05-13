@@ -16,8 +16,8 @@ shared_addressesMonitored = ""
 addressesToMonitor = []
 addressesToMonitorLastTrade = {}
 
-etherscanAPI = "XXX"
-infuraAPI = "XXX"
+etherscanAPI = "XX"
+infuraAPI = "XX"
 
 cachedABIs = {}
 lastBlock = 17251982 # 17251967
@@ -27,47 +27,6 @@ stats = {
             "ignoredTx" : 0,
             "candidateTx" : 0
         }
-
-def refreshRecentTradesSince(addresses, last_seen_trades):
-    # 1inch API endpoint
-    url = f"https://api.1inch.exchange/v3.0/1/swap/user"
-
-    updated_trades = {}
-
-    for address in addresses:
-        print("Refreshing trades for [" + str(address) + "]..")
-        # Get the last seen trade for the address
-        last_seen_trade = last_seen_trades.get(address)
-
-        # Parameters for the request
-        params = {
-            "fromDate": last_seen_trade or "0",
-            "toDate": "9999999999",
-            "from": address,
-            "size": 10  # Number of recent trades to retrieve for each address
-        }
-
-        # Make the GET request
-        response = requests.get(url, params=params)
-
-        # Check the response status
-        if response.status_code == 200:
-            trades = response.json()["transactions"]
-
-            # If there are new trades, update the last seen trade
-            if trades:
-                last_trade = trades[-1]
-                updated_trades[address] = last_trade["date"]
-
-            # Process the trades as needed
-            for trade in trades:
-                # Do something with the trade data
-                print(trade)
-        else:
-            print(f"Error retrieving recent trades for address: {address}")
-            print(response)
-
-    return updated_trades
 
 def getABI(contractAddress):
     abi = ""
@@ -184,36 +143,28 @@ def refreshRecentTradesOnchain(addresses, last_seen_trades):
                 dstTokenSymbol = "ETH"
             
 
-            print("== Swap from [" + srcTokenName + "] [" + srcTokenSymbol + "] => [" + dstTokenName + "] [" + dstTokenSymbol + "]")
+            print("=== Swap from [" + srcTokenName + "] [" + srcTokenSymbol + "] => [" + dstTokenName + "] [" + dstTokenSymbol + "]")
+            
+            trade = { 
+                        "address": txFromAddress,
+                        "srcToken" : srcTokenAddress,
+                        "srcTokenSymbol" : srcTokenSymbol,
+                        "dstToken" : dstTokenAddress,
+                        "dstTokenSymbol" : dstTokenSymbol
+                    }
+            trades.append(trade)
 
-            # Sourcing ABI for [0x1111111254EEB25477B68fb85Ed929f73A960582] from cache
-            # {'srcToken': '0xb794Ad95317f75c44090f64955954C3849315fFe', 
-            # 'amount': 123245365836168002646841491456, 
-            # 'minReturn': 2064598069515467915, 
-            # 'pools': [28948022309329048857349863385047695461982394024809266214477451752942157778725]}
-
-            #print(txparams)
-
-            # detect whether this 
-            #if 'amountIn' in txparams:
-
-
-            # Filter and process the transactions to identify trades
-            #print(trade_info)
-            #trades.append(trade_info)
         lastBlock = lastBlock + 1
 
     return trades
 
 def refreshRecentTrades():
     print("Refreshing trades for [" + str(len(addressesToMonitor)) + "] addresses..")
-    #newTrades = refreshRecentTradesSince(addressesToMonitor, addressesToMonitorLastTrade)
     newTrades = refreshRecentTradesOnchain(addressesToMonitor, addressesToMonitorLastTrade)
 
     for trade in newTrades:
-        # TODO check market and who is monitoring
-        # TODO trigger trade event if needed
-        print("New trade : " + str(trade))
+        # TODO trigger trade event on chain
+        print("New trade by : " + str(trade.address))
 
     # Update debug status
     global shared_addressesMonitored
@@ -225,8 +176,10 @@ def updateAddressCandidates():
 
 def populateAddressWatchlist():
     # TODO get from contract
+    # The SC should have a GETTER which will return a mapping
+    # WATCHER => WATCHEE
 
-    # Sample addresses from https://etherscan.io/address/1inch.eth
+    # For now, sample addresses from https://etherscan.io/address/1inch.eth
     global addressesToMonitor
     addressesToMonitor = ["0x2119131ddc4c6f9f0c3924117d59df999426fc4d", "0x86Ab1098945C2501dA6219FF55cE2b181159Eea2"]
 
@@ -245,6 +198,7 @@ def processingThread():
     global shared_value
 
     print("Getting addresses to watch..")
+    # Collect addresses of users who are copy-trading and who they are following
     populateAddressWatchlist()
 
     while True:
